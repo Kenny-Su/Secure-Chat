@@ -141,16 +141,15 @@ func (c *Chatter) ReturnHandshake(partnerIdentity, partnerEphemeral *PublicKey) 
 	ephemeralKeypair := GenerateKeyPair()
 
 	dh1 := DHCombine(partnerIdentity, &ephemeralKeypair.PrivateKey)
+	defer dh1.Zeroize()
 	dh2 := DHCombine(partnerEphemeral, &c.Identity.PrivateKey)
+	defer dh2.Zeroize()
 	dh3 := DHCombine(partnerEphemeral, &ephemeralKeypair.PrivateKey)
+	defer dh3.Zeroize()
 
 	rootKey := CombineKeys(dh1, dh2, dh3)
 
 	checkKey := rootKey.DeriveKey(HANDSHAKE_CHECK_LABEL)
-
-	dh1.Zeroize()
-	dh2.Zeroize()
-	dh3.Zeroize()
 
 	sendRootKey := &SymmetricKey{Key: append([]byte(nil), rootKey.Key...)}
 
@@ -179,16 +178,15 @@ func (c *Chatter) FinalizeHandshake(partnerIdentity, partnerEphemeral *PublicKey
 	session := c.Sessions[*partnerIdentity]
 
 	dh1 := DHCombine(partnerEphemeral, &c.Identity.PrivateKey)
+	defer dh1.Zeroize()
 	dh2 := DHCombine(partnerIdentity, &session.MyDHRatchet.PrivateKey)
+	defer dh2.Zeroize()
 	dh3 := DHCombine(partnerEphemeral, &session.MyDHRatchet.PrivateKey)
+	defer dh3.Zeroize()
 
 	rootKey := CombineKeys(dh1, dh2, dh3)
 
 	checkKey := rootKey.DeriveKey(HANDSHAKE_CHECK_LABEL)
-
-	dh1.Zeroize()
-	dh2.Zeroize()
-	dh3.Zeroize()
 
 	sendRootKey := &SymmetricKey{Key: append([]byte(nil), rootKey.Key...)}
 
@@ -213,13 +211,12 @@ func (c *Chatter) SendMessage(partnerIdentity *PublicKey, plaintext string) (*Me
 		newDHRatchet := GenerateKeyPair()
 
 		dhSharedSecret := DHCombine(session.PartnerDHRatchet, &newDHRatchet.PrivateKey)
+		defer dhSharedSecret.Zeroize()
 
 		ratchetedRoot := session.ReceiveRootChain.DeriveKey(ROOT_LABEL)
+		defer ratchetedRoot.Zeroize()
 
 		newSendRoot := CombineKeys(ratchetedRoot, dhSharedSecret)
-
-		ratchetedRoot.Zeroize()
-		dhSharedSecret.Zeroize()
 
 		if session.SendRootChain != nil {
 			session.SendRootChain.Zeroize()
@@ -246,6 +243,7 @@ func (c *Chatter) SendMessage(partnerIdentity *PublicKey, plaintext string) (*Me
 	session.SendCounter++
 
 	messageKey := session.SendChain.DeriveKey(KEY_LABEL)
+	defer messageKey.Zeroize()
 
 	newSendChain := session.SendChain.DeriveKey(CHAIN_LABEL)
 	session.SendChain.Zeroize()
@@ -265,8 +263,6 @@ func (c *Chatter) SendMessage(partnerIdentity *PublicKey, plaintext string) (*Me
 	additionalData := message.EncodeAdditionalData()
 
 	message.Ciphertext = messageKey.AuthenticatedEncrypt(plaintext, additionalData, iv)
-
-	messageKey.Zeroize()
 
 	return message, nil
 }
@@ -334,14 +330,14 @@ func (c *Chatter) ReceiveMessage(message *Message) (string, error) {
 		}
 
 		dhSecret := DHCombine(message.NextDHRatchet, &session.MyDHRatchet.PrivateKey)
+		defer dhSecret.Zeroize()
 
 		ratchetedRoot := baseRoot.DeriveKey(ROOT_LABEL)
+		defer ratchetedRoot.Zeroize()
 
 		oldKeysToZeroize = append(oldKeysToZeroize, session.ReceiveRootChain)
 
 		newReceiveRoot := CombineKeys(ratchetedRoot, dhSecret)
-		ratchetedRoot.Zeroize()
-		dhSecret.Zeroize()
 
 		session.ReceiveRootChain = newReceiveRoot
 
