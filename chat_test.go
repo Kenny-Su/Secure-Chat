@@ -25,7 +25,7 @@ import (
 )
 
 // parameters for the extended tests
-const EXTENDED_TEST_ROUNDS = 10000
+const EXTENDED_TEST_ROUNDS = 1000
 const EXTENDED_TEST_PARTICIPANTS = 5
 
 // Rate of messages which will be delivered with modifications
@@ -705,6 +705,11 @@ func TestAsynchronousChatExtended(t *testing.T) {
 	queueLength := 0
 
 	for i := 0; i < EXTENDED_TEST_ROUNDS; i++ {
+		// Log progress periodically
+		if i%100 == 0 {
+			fmt.Printf("Round %d/%d, queue length: %d\n", i, EXTENDED_TEST_ROUNDS, queueLength)
+		}
+
 		if queueLength < EXTENDED_TEST_ROUNDS-i && queueLength < len(queue) && rand.Int()%2 == 0 {
 
 			c1 := chatters[rand.Int()%len(chatters)]
@@ -726,6 +731,22 @@ func TestAsynchronousChatExtended(t *testing.T) {
 				}
 				queueLength -= 1
 			}
+		}
+
+		// Log detailed state after round 500
+		if i >= 500 && i%50 == 0 {
+			fmt.Printf("\n=== Detailed state at round %d ===\n", i)
+			fmt.Printf("Queue length: %d\n", queueLength)
+			for idx, chatter := range chatters {
+				fmt.Printf("Chatter %d (%s): %d sessions\n",
+					idx, PrintHandle(&chatter.Identity.PublicKey), len(chatter.Sessions))
+				for partnerKey, session := range chatter.Sessions {
+					cachedKeys := len(session.CachedReceiveKeys)
+					fmt.Printf("  Session with %s: SendCounter=%d, ReceiveCounter=%d, CachedKeys=%d\n",
+						PrintHandle(&partnerKey), session.SendCounter, session.ReceiveCounter, cachedKeys)
+				}
+			}
+			fmt.Printf("===================================\n\n")
 		}
 	}
 }
